@@ -19,6 +19,10 @@ Why evilRedis?
 
 How it works?
 -------------
+
+
+## Horn #1 - Taming `echo`
+
 Pass in your shell command using redis's `echo` command along with a trigger keyword.
 ```
 # Normal echo behavior
