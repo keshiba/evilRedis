@@ -26,15 +26,18 @@ How it works?
 Pass in your shell command using redis's `echo` command along with a trigger keyword.
 ```
 # Normal echo behavior
-echo whoami
-> whoami
+> echo whoami
+whoami
 
 # Shell execution is triggered with the keyword "evilRedisCmd:"
-echo evilRedisCmd:whoami
-> keshiba\n
+> echo evilRedisCmd:whoami
+keshiba\n
 ```
+When evilRedis finds the trigger keyword, it will try to execute the command that follows in the shell and returns the output.
+Fun right?
 
-I promise I'll work on the README, when I add more horns to evilRedis.
+
+Stay tuned for more...
 
 Until then,
 Enjoy!
