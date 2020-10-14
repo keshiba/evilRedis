@@ -17,7 +17,20 @@ Why evilRedis?
 
 #### It was an accident! Honestly...
 
-I promise I'll work on the README, as and when I add more horns to evilRedis.
+How it works?
+-------------
+Pass in your shell command using redis's `echo` command along with a trigger keyword.
+```
+# Normal echo behavior
+echo whoami
+> whoami
+
+# Shell execution is triggered with the keyword "evilRedisCmd:"
+echo evilRedisCmd:whoami
+> keshiba\n
+```
+
+I promise I'll work on the README, when I add more horns to evilRedis.
 
 Until then,
 Enjoy!
